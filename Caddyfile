@@ -1,0 +1,30 @@
+# Local-only HTTPS in front of the Django API, so the browser treats the LAN
+# address as a secure context (needed for Scalar's "Connect via MCP" button,
+# which uses Web Crypto / Clipboard APIs the browser disables on plain HTTP
+# unless the host is literally "localhost").
+#
+# `tls internal` issues a certificate from Caddy's own local CA, for whatever
+# hostname or IP the browser actually requested (SNI) - so the same block
+# serves https://localhost:8443 and https://<lan-ip>:8443 without listing
+# addresses by hand. The browser will show a "not private" warning the first
+# time (it's a self-signed CA, not a public one); clicking through is enough
+# to make isSecureContext true. To remove the warning entirely, trust
+# Caddy's root CA - see README.md.
+#
+# Hostnames must be listed explicitly (a bare `:443` catch-all needs Caddy's
+# on-demand TLS, which refuses to issue without extra `ask` config - the TLS
+# handshake fails outright instead). Add your machine's LAN IP here if it
+# differs from the ones below (`hostname -I` or `ip a`), and re-run
+# `docker compose --profile https up -d` after editing.
+#
+# default_sni: curl (unlike every real browser) sends no SNI when the host is
+# a literal IP address, and Caddy would otherwise reject that handshake for
+# not matching any site block. Browsers are unaffected either way.
+{
+	default_sni localhost
+}
+
+localhost, 127.0.0.1, 10.1.130.244, 10.1.134.14 {
+	tls internal
+	reverse_proxy api:8000
+}

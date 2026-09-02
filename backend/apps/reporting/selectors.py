@@ -1,0 +1,248 @@
+"""Read-only queries over the operational tables.
+
+No new models and no denormalised report tables: everything a store asks for
+is already in the ledger and the sales tables, and a second copy of the truth
+is a second thing that can be wrong. If a query ever gets too slow for the data
+volume, the fix is an index or a materialised view - not a parallel schema.
+
+Margins use the `unit_cost` frozen on each sale line, so a report about last
+month does not change when this month's purchases move the average cost.
+"""
+from __future__ import annotations
+
+from datetime import timedelta
+from decimal import Decimal
+
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models.functions import Coalesce, TruncDate
+from django.utils import timezone
+
+from apps.cash.models import CashSession
+from apps.catalog.models import ProductVariant
+from apps.core.money import money
+from apps.inventory.models import StockLevel
+from apps.sales.models import Payment, Refund, Sale, SaleItem
+
+MONEY = DecimalField(max_digits=18, decimal_places=2)
+ZERO = Decimal("0.00")
+
+
+def resolve_period(date_from=None, date_to=None, default_days: int = 30):
+    """Default to the last 30 days, inclusive of today."""
+    now = timezone.now()
+    date_to = date_to or now
+    date_from = date_from or (date_to - timedelta(days=default_days))
+    return date_from, date_to
+
+
+def _settled_sales(date_from, date_to, location=None):
+    queryset = Sale.objects.filter(
+        status__in=Sale.SETTLED_STATUSES, occurred_at__gte=date_from, occurred_at__lte=date_to
+    )
+    if location is not None:
+        queryset = queryset.filter(location=location)
+    return queryset
+
+
+def sales_summary(*, date_from, date_to, location=None) -> dict:
+    sales = _settled_sales(date_from, date_to, location)
+
+    totals = sales.aggregate(
+        sales_count=Count("id"),
+        gross=Coalesce(Sum("total"), ZERO, output_field=MONEY),
+        tax=Coalesce(Sum("tax_total"), ZERO, output_field=MONEY),
+        discounts=Coalesce(Sum("discount_total"), ZERO, output_field=MONEY),
+        refunded=Coalesce(Sum("refunded_total"), ZERO, output_field=MONEY),
+    )
+
+    by_method = {
+        row["method"]: money(row["total"])
+        for row in Payment.objects.filter(sale__in=sales).values("method").annotate(total=Sum("amount"))
+    }
+
+    by_day = [
+        {
+            "date": row["day"],
+            "sales_count": row["sales_count"],
+            "total": money(row["total"]),
+        }
+        for row in sales.annotate(day=TruncDate("occurred_at"))
+        .values("day")
+        .annotate(sales_count=Count("id"), total=Sum("total"))
+        .order_by("day")
+    ]
+
+    gross = money(totals["gross"])
+    refunded = money(totals["refunded"])
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "sales_count": totals["sales_count"],
+        "gross_total": gross,
+        "refunded_total": refunded,
+        "net_total": money(gross - refunded),
+        "tax_total": money(totals["tax"]),
+        "discount_total": money(totals["discounts"]),
+        "average_ticket": money(gross / totals["sales_count"]) if totals["sales_count"] else ZERO,
+        "payments_by_method": by_method,
+        "by_day": by_day,
+    }
+
+
+def top_products(*, date_from, date_to, location=None, limit: int = 10) -> list[dict]:
+    """Ranked by net units sold: returns are subtracted, not ignored."""
+    net_quantity = ExpressionWrapper(F("quantity") - F("refunded_quantity"), output_field=MONEY)
+
+    rows = (
+        SaleItem.objects.filter(sale__in=_settled_sales(date_from, date_to, location))
+        .values("variant_id", "sku", "description")
+        .annotate(
+            units=Coalesce(Sum(net_quantity), ZERO, output_field=MONEY),
+            revenue=Coalesce(Sum("line_total"), ZERO, output_field=MONEY),
+        )
+        .order_by("-units")[:limit]
+    )
+    return [
+        {
+            "variant": str(row["variant_id"]),
+            "sku": row["sku"],
+            "description": row["description"],
+            "units": int(row["units"]),
+            "revenue": money(row["revenue"]),
+        }
+        for row in rows
+    ]
+
+
+def margin_report(*, date_from, date_to, location=None) -> dict:
+    """Revenue against the cost frozen on each line when it was sold."""
+    items = SaleItem.objects.filter(sale__in=_settled_sales(date_from, date_to, location))
+
+    net_quantity = F("quantity") - F("refunded_quantity")
+    revenue_per_unit = ExpressionWrapper(F("line_total") / F("quantity"), output_field=MONEY)
+
+    totals = items.aggregate(
+        revenue=Coalesce(
+            Sum(ExpressionWrapper(revenue_per_unit * net_quantity, output_field=MONEY)),
+            ZERO,
+            output_field=MONEY,
+        ),
+        cost=Coalesce(
+            Sum(ExpressionWrapper(F("unit_cost") * net_quantity, output_field=MONEY)),
+            ZERO,
+            output_field=MONEY,
+        ),
+        units=Coalesce(Sum(net_quantity), 0),
+    )
+
+    revenue = money(totals["revenue"])
+    cost = money(totals["cost"])
+    profit = money(revenue - cost)
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "units_sold": int(totals["units"] or 0),
+        "revenue": revenue,
+        "cost": cost,
+        "gross_profit": profit,
+        "margin_percent": money(profit / revenue * 100) if revenue else ZERO,
+    }
+
+
+def inventory_valuation(*, location=None) -> dict:
+    """What the stock on hand is worth, at moving average cost."""
+    levels = StockLevel.objects.filter(quantity__gt=0).select_related("variant")
+    if location is not None:
+        levels = levels.filter(location=location)
+
+    totals = levels.aggregate(
+        units=Coalesce(Sum("quantity"), 0),
+        cost_value=Coalesce(
+            Sum(
+                ExpressionWrapper(F("quantity") * F("variant__average_cost"), output_field=MONEY)
+            ),
+            ZERO,
+            output_field=MONEY,
+        ),
+        retail_value=Coalesce(
+            Sum(ExpressionWrapper(F("quantity") * F("variant__price"), output_field=MONEY)),
+            ZERO,
+            output_field=MONEY,
+        ),
+    )
+
+    negative = list(
+        StockLevel.objects.filter(quantity__lt=0)
+        .select_related("variant", "variant__product", "location")
+        .values("variant_id", "variant__sku", "location__name", "quantity")[:50]
+    )
+
+    return {
+        "units_on_hand": int(totals["units"] or 0),
+        "cost_value": money(totals["cost_value"]),
+        "retail_value": money(totals["retail_value"]),
+        "potential_margin": money(totals["retail_value"] - totals["cost_value"]),
+        "variants_tracked": ProductVariant.objects.filter(is_active=True).count(),
+        # Negative stock only arises from replayed offline sales (decision D4).
+        "negative_stock": [
+            {
+                "variant": str(row["variant_id"]),
+                "sku": row["variant__sku"],
+                "location": row["location__name"],
+                "quantity": row["quantity"],
+            }
+            for row in negative
+        ],
+    }
+
+
+def cash_sessions_report(*, date_from, date_to, location=None) -> dict:
+    """Closed shifts and their differences - the arqueo history."""
+    sessions = CashSession.objects.filter(
+        status=CashSession.Status.CLOSED, closed_at__gte=date_from, closed_at__lte=date_to
+    ).select_related("register", "opened_by", "closed_by")
+    if location is not None:
+        sessions = sessions.filter(register__location=location)
+
+    totals = sessions.aggregate(
+        sessions=Count("id"),
+        shortfall=Coalesce(Sum("difference", filter=Q(difference__lt=0)), ZERO, output_field=MONEY),
+        surplus=Coalesce(Sum("difference", filter=Q(difference__gt=0)), ZERO, output_field=MONEY),
+    )
+
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "sessions_closed": totals["sessions"],
+        "total_shortfall": money(totals["shortfall"]),
+        "total_surplus": money(totals["surplus"]),
+        "sessions": [
+            {
+                "id": str(session.pk),
+                "register": session.register.name,
+                "opened_at": session.opened_at,
+                "closed_at": session.closed_at,
+                "expected": session.expected_amount,
+                "counted": session.counted_amount,
+                "difference": session.difference,
+                "closed_by": getattr(session.closed_by, "email", None),
+            }
+            for session in sessions.order_by("-closed_at")[:100]
+        ],
+    }
+
+
+def refunds_summary(*, date_from, date_to, location=None) -> dict:
+    refunds = Refund.objects.filter(occurred_at__gte=date_from, occurred_at__lte=date_to)
+    if location is not None:
+        refunds = refunds.filter(location=location)
+
+    totals = refunds.aggregate(
+        count=Count("id"),
+        total=Coalesce(Sum("total"), ZERO, output_field=MONEY),
+        restocked=Count("id", filter=Q(restock=True)),
+    )
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "refunds_count": totals["count"],
+        "refunds_total": money(totals["total"]),
+        "restocked_count": totals["restocked"],
+        "written_off_count": totals["count"] - totals["restocked"],
+    }

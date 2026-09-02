@@ -1,0 +1,52 @@
+{
+  "$schema": "https://registry.scalar.com/@scalar/schemas/config",
+  "scalar": "2.0.0",
+  "info": {
+    "title": "Retail POS SaaS",
+    "description": "Backend multi-tenant para retail de moda: catálogo, inventario por ledger, ventas, caja, compras y sincronización offline."
+  },
+  "navigation": {
+    "header": [
+      { "type": "link", "title": "Introducción", "to": "/" },
+      { "type": "link", "title": "API Reference", "to": "/api" },
+      { "type": "spacer" }
+    ],
+    "routes": {
+      "/": {
+        "type": "page",
+        "title": "Introducción",
+        "filepath": "README.md",
+        "icon": "phosphor/regular/house"
+      },
+      "/architecture": {
+        "type": "page",
+        "title": "Arquitectura",
+        "filepath": "ARCHITECTURE.md",
+        "icon": "phosphor/regular/buildings"
+      },
+      "/domain": {
+        "type": "page",
+        "title": "Modelo de dominio",
+        "filepath": "DOMAIN.md",
+        "icon": "phosphor/regular/tree-structure"
+      },
+      "/api-guide": {
+        "type": "page",
+        "title": "Guía de la API",
+        "filepath": "API.md",
+        "icon": "phosphor/regular/book-open"
+      },
+      "/api": {
+        "type": "openapi",
+        "title": "API Reference",
+        "filepath": "docs/api-reference/openapi.yaml",
+        "icon": "phosphor/regular/plug"
+      }
+    }
+  },
+  "siteConfig": {
+    "branding": {
+      "theme": "purple"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+Te invitaron a trabajar en {{ organization }} como {{ role }}.
+
+Abre este enlace para aceptar la invitación y elegir tus datos de acceso:
+
+{{ link }}
+
+El enlace vence en {{ days }} días. Si no esperabas esta invitación, ignora
+este mensaje: sin abrir el enlace no se crea nada.

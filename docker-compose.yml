@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-pos}
+      POSTGRES_USER: ${DB_USER:-pos}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pos}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT_EXPOSED:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pos} -d ${DB_NAME:-pos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT_EXPOSED:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: "true"
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-insecure-secret-key-change-me}
+      DB_HOST: db
+      # Internal container port, always 5432 regardless of the host-side
+      # mapping in DB_PORT_EXPOSED. Set explicitly: backend/.env is bind-mounted
+      # into the container (see volumes below) and would otherwise leak its
+      # host-facing DB_PORT in here, since django-environ only falls back to
+      # the .env file for variables not already set in the environment.
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-pos}
+      DB_USER: ${DB_USER:-pos}
+      DB_PASSWORD: ${DB_PASSWORD:-pos}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Local-only HTTPS front door. Exists so the browser treats a LAN address
+  # (not just "localhost") as a secure context - some Scalar API Reference
+  # features (the MCP connection button) need Web Crypto / Clipboard, which
+  # browsers disable on plain HTTP unless the host is literally "localhost".
+  # See Caddyfile. Optional: only start it with `docker compose up caddy`
+  # or `--profile https`; the api service works standalone without it.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    ports:
+      - "${HTTPS_PORT:-8443}:443"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  caddy_data:

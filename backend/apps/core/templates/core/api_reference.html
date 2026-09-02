@@ -1,0 +1,41 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{ title }} — API Reference</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    {# Vendored locally on purpose: this page must render even if #}
+    {# cdn.jsdelivr.net (or any external CDN) is unreachable. See #}
+    {# apps/core/static/core/vendor/ and ARCHITECTURE.md. #}
+    <script src="{% static 'core/vendor/scalar-api-reference.standalone.js' %}"></script>
+    <script>
+      Scalar.createApiReference('#app', {
+        url: '{{ schema_url }}',
+        theme: 'purple',
+        // proxyUrl intentionally omitted: this is the local dev/self-hosted
+        // reference, and it must not depend on Scalar's hosted CORS proxy
+        // either. "Try it" works directly against the API's own CORS config.
+        //
+        // The "Generate MCP" / "Connect MCP" sidebar button is a *separate*
+        // feature from the developer-tools bar below, gated by its own
+        // check: `!mcp?.disabled && (hostname === "localhost" || !!mcp)`.
+        // Supplying `mcp` (even empty) satisfies that check on any host -
+        // clicking it still calls Scalar's own cloud (api.scalar.com) to
+        // generate a temporary MCP server from this page's OpenAPI document,
+        // exactly like the localhost-only default does.
+        mcp: {},
+        // Separately gates a "Developer Tools" toolbar (theme, layout, Ask
+        // AI) by the same kind of hostname check. Harmless to force on too.
+        showDeveloperTools: 'always',
+      })
+    </script>
+  </body>
+</html>
