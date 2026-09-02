@@ -13,29 +13,92 @@ designed so the second and the hundredth need no rewrite.
 |---|---|---|
 | 1 | Tenancy, auth, roles, catalog, ledger inventory, subscriptions, audit, idempotency | **done** |
 | 2 | Purchasing, Sales/POS, payments, customers, cash, refunds | **done** |
-| 3 | Offline sync, reporting, hardening | **done** — 101 tests green |
+| 3 | Offline sync, reporting, hardening | **done** — 158 tests green |
 
-## Running it
+## Running it (Docker — first time)
+
+Requirements: [Docker Engine](https://docs.docker.com/engine/install/) with
+the Compose plugin (`docker compose version` should print something). Nothing
+else — Python, Postgres and Redis all run inside containers.
 
 ```bash
-# 1. Infrastructure (ports are configurable in ./.env)
-docker compose up -d db redis
+git clone https://github.com/IBER-DEV/POS-SYSTEM.git
+cd POS-SYSTEM
 
-# 2. Backend
-cd backend
-python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-cp .env.example .env          # already points at the compose ports
-.venv/bin/python manage.py migrate
-.venv/bin/python manage.py runserver
+# Optional: only needed if you want to change the host-side ports (see
+# .env.example) — the defaults below work as-is with no .env file at all.
+cp .env.example .env
+
+docker compose up -d --build
 ```
 
-Everything in one container instead: `docker compose up` (the `api` service).
+This builds the `api` image and starts three services: `db` (Postgres 16),
+`redis` and `api` (Django). The `api` container's
+[entrypoint](backend/entrypoint.sh) runs migrations, seeds the subscription
+plan catalogue and collects static files automatically **on every start** —
+there is no manual `migrate` step to run.
+
+Check it came up clean:
+
+```bash
+docker compose ps                 # all three should be Up (db/redis "healthy")
+docker compose logs -f api        # watch it apply migrations, then "Starting development server..."
+curl http://localhost:8000/api/v1/health/
+```
 
 - API: <http://localhost:8000/api/v1/>
 - Health: <http://localhost:8000/api/v1/health/>
 - Swagger UI: <http://localhost:8000/api/v1/docs/>
 - API Reference (Scalar, self-hosted — see below): <http://localhost:8000/api/v1/reference/>
 - OpenAPI schema: <http://localhost:8000/api/v1/schema/>
+
+To stop everything: `docker compose down` (add `-v` only if you also want to
+wipe the Postgres volume — see "Resetting the database" below).
+
+### Everyday commands (Docker)
+
+```bash
+docker compose up -d              # start again (no --build needed unless requirements.txt changed)
+docker compose logs -f api        # tail the Django dev server
+docker compose exec api python manage.py migrate        # normally automatic, but safe to re-run
+docker compose exec api python manage.py createsuperuser --email admin@example.com
+# The api container exports DJANGO_SETTINGS_MODULE=development, which
+# overrides pytest.ini's `test` settings (rate limiting stays on and can
+# flake auth-heavy tests under load) — force it explicitly:
+docker compose exec -e DJANGO_SETTINGS_MODULE=config.settings.test api pytest
+docker compose exec -e DJANGO_SETTINGS_MODULE=config.settings.test api pytest -m "not slow"
+docker compose restart api        # apply a code/dependency change without a full rebuild
+```
+
+### Resetting the database
+
+To wipe all data and start over (keeps migrations, re-seeds plans):
+
+```bash
+docker compose exec api python manage.py flush --no-input
+docker compose exec api python manage.py seed_plans
+```
+
+To also throw away the Postgres volume itself (fully from scratch):
+
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
+### Running the backend without Docker
+
+Only needed if you specifically want a local Python environment instead of
+containers:
+
+```bash
+docker compose up -d db redis     # still need Postgres + Redis somewhere
+cd backend
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+cp .env.example .env              # already points at the compose ports
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py runserver
+```
 
 ### API Reference (Scalar)
 
@@ -132,6 +195,10 @@ account, accepting only adds the membership.
 
 ## Commands worth knowing
 
+Prefix each with `docker compose exec api` when running against the Docker
+setup (e.g. `docker compose exec api python manage.py recalculate_stock`); run
+bare from `backend/` with the venv active otherwise.
+
 ```bash
 manage.py recalculate_stock          # rebuild stock from the ledger; also a drift detector
 manage.py recalculate_stock --organization <slug|uuid>
@@ -189,6 +256,6 @@ money if they break:
 | `tests/test_subscription_gating.py` | A lapsed subscription blocks writes, never reads |
 
 ```bash
-pytest                 # 101 tests, ~13s
-pytest -m "not slow"   # 97 tests, ~3s — the loop to run while coding
+pytest                 # 158 tests, ~14s
+pytest -m "not slow"   # 154 tests, ~7s — the loop to run while coding
 ```
