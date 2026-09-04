@@ -49,7 +49,13 @@ class ActiveByDefaultMixin:
     references it, but a plain list call should not resurface it. Pass
     `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
     to see it anyway, e.g. for reports.
+
+    `active_field` lets a view whose own model has no flag follow the one on
+    what it describes: a stock row is not deactivated, the variant it counts
+    is.
     """
+
+    active_field = "is_active"
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -58,7 +64,7 @@ class ActiveByDefaultMixin:
             "include_inactive", ""
         ).lower() in ("1", "true", "yes")
         if not wants_inactive:
-            queryset = queryset.filter(is_active=True)
+            queryset = queryset.filter(**{self.active_field: True})
         return queryset
 
 

@@ -6,7 +6,12 @@ from rest_framework.response import Response
 
 from apps.core import capabilities as caps
 from apps.core.audit import record_audit
-from apps.core.views import IdempotentActionMixin, TenantReadOnlyViewSet, TenantViewSetMixin
+from apps.core.views import (
+    ActiveByDefaultMixin,
+    IdempotentActionMixin,
+    TenantReadOnlyViewSet,
+    TenantViewSetMixin,
+)
 from apps.organizations.selectors import default_location
 
 from .filters import InventoryMovementFilter, StockDiscrepancyFilter, StockLevelFilter
@@ -22,6 +27,7 @@ from .services import MovementLine, record_adjustment, record_initial_stock
 
 
 class StockLevelViewSet(
+    ActiveByDefaultMixin,
     TenantViewSetMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -33,8 +39,14 @@ class StockLevelViewSet(
     Stock only changes through movements; allowing a PATCH on quantity would
     reintroduce exactly the untraceable `stock -= n` this design removes.
     Only `reorder_point` is editable.
+
+    A deleted product leaves its balance row behind at zero - the ledger is
+    rebuilt from it - but the row should not keep showing up in the stock list
+    as if the product still existed, so rows of deactivated variants are hidden
+    unless asked for.
     """
 
+    active_field = "variant__is_active"
     serializer_class = StockLevelSerializer
     model = StockLevel
     select_related = ("variant", "variant__product", "location")

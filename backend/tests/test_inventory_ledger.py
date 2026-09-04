@@ -122,3 +122,53 @@ def test_stock_quantity_is_not_writable_through_the_api(tenant_a, make_variant, 
     level.refresh_from_db()
     assert level.quantity == 10  # ignored: stock only moves through movements
     assert level.reorder_point == 3
+
+
+def test_deleting_a_product_takes_its_row_out_of_the_stock_list(
+    tenant_a, make_stocked_variant, client_for
+):
+    """Borrar un producto lo baja a cero, y su fila deja de estorbar en el listado."""
+    variant = make_stocked_variant(tenant_a, quantity=10)
+    client = client_for(tenant_a.owner, tenant_a.org)
+    assert client.get("/api/v1/inventory/stock/").data["count"] == 1
+
+    assert client.delete(f"/api/v1/products/{variant.product_id}/").status_code == 204
+
+    assert client.get("/api/v1/inventory/stock/").data["count"] == 0
+    with tenant_context(tenant_a.org.pk):
+        # La fila sigue en la base: `recalculate_stock` reconstruye saldos desde
+        # el ledger y necesita encontrarla.
+        level = StockLevel.objects.get(variant=variant)
+        assert level.quantity == 0
+
+
+def test_the_stock_of_a_deleted_product_can_still_be_asked_for(
+    tenant_a, make_stocked_variant, client_for
+):
+    """Esconderlo por defecto no es borrarlo: un reporte todavía puede pedirlo."""
+    variant = make_stocked_variant(tenant_a, quantity=10)
+    client = client_for(tenant_a.owner, tenant_a.org)
+    client.delete(f"/api/v1/products/{variant.product_id}/")
+
+    included = client.get("/api/v1/inventory/stock/?include_inactive=true").data
+    only_deleted = client.get("/api/v1/inventory/stock/?is_active=false").data
+
+    assert included["count"] == 1
+    assert only_deleted["count"] == 1
+    assert only_deleted["results"][0]["quantity"] == 0
+
+
+def test_the_ledger_keeps_the_history_of_a_deleted_product(
+    tenant_a, make_stocked_variant, client_for
+):
+    """El movimiento es el historial y no se toca: cuenta de dónde salió la mercancía."""
+    variant = make_stocked_variant(tenant_a, quantity=10)
+    client = client_for(tenant_a.owner, tenant_a.org)
+
+    client.delete(f"/api/v1/products/{variant.product_id}/")
+
+    movements = client.get(f"/api/v1/inventory/movements/?variant={variant.pk}").data
+    kinds = [row["movement_type"] for row in movements["results"]]
+    assert movements["count"] == 2
+    # La entrada original y el ajuste que la deja en cero, ambos legibles.
+    assert set(kinds) == {MovementType.PURCHASE, MovementType.ADJUSTMENT}

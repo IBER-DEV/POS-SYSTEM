@@ -253,6 +253,18 @@ Returns the created movements (201).
 Filters: `?location=` `?variant=` `?product=` `?movement_type=`
 `?occurred_after=` `?occurred_before=` `?in_stock=` `?below_reorder_point=`.
 
+**Deleting a product leaves nothing to sell but everything to audit.** The
+product is deactivated, its stock is adjusted down to zero, and its balance row
+stays in the database because `recalculate_stock` rebuilds balances from the
+ledger and needs to find it. That row is hidden from `/inventory/stock/` — a
+deleted product should not keep appearing in the stock list at zero — and comes
+back with `?include_inactive=true` or `?is_active=false`.
+
+The movements themselves are never hidden and never deleted: `/inventory/movements/`
+still shows the original entry and the adjustment that zeroed it. That is the
+history, and it is what makes "where did these units come from?" answerable
+after the product is gone.
+
 ### Customers
 | Method | Path | Capability |
 |---|---|---|

@@ -10,6 +10,10 @@ class StockLevelFilter(filters.FilterSet):
     location = filters.UUIDFilter(field_name="location_id")
     variant = filters.UUIDFilter(field_name="variant_id")
     product = filters.UUIDFilter(field_name="variant__product_id")
+    # The flag lives on the variant, not on the balance row, but it is spelled
+    # `is_active` here so the "show me the deleted ones" escape hatch reads the
+    # same on every endpoint.
+    is_active = filters.BooleanFilter(field_name="variant__is_active")
     below_reorder_point = filters.BooleanFilter(method="filter_below_reorder_point")
     in_stock = filters.BooleanFilter(method="filter_in_stock")
 

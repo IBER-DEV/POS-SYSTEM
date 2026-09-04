@@ -35,6 +35,13 @@ class BrandViewSet(TenantModelViewSet):
 
 
 class ProductViewSet(ActiveByDefaultMixin, TenantModelViewSet):
+    """The commercial concept, with its variants written inline.
+
+    Deleting deactivates: sales and the inventory ledger point here and must
+    stay readable. A deactivated product drops out of this list and its stock
+    is taken down to zero; `?include_inactive=true` brings it back for reports.
+    """
+
     serializer_class = ProductSerializer
     model = Product
     select_related = ("category", "brand")
@@ -71,6 +78,12 @@ class ProductViewSet(ActiveByDefaultMixin, TenantModelViewSet):
 
 
 class ProductVariantViewSet(ActiveByDefaultMixin, TenantModelViewSet):
+    """The sellable, stockable unit: a size and colour of a product.
+
+    Deleting deactivates it and zeroes its stock, same as with a product;
+    `?include_inactive=true` still lists it.
+    """
+
     serializer_class = ProductVariantSerializer
     model = ProductVariant
     select_related = ("product", "product__brand")

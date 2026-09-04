@@ -2477,6 +2477,11 @@ paths:
         Stock only changes through movements; allowing a PATCH on quantity would
         reintroduce exactly the untraceable `stock -= n` this design removes.
         Only `reorder_point` is editable.
+
+        A deleted product leaves its balance row behind at zero - the ledger is
+        rebuilt from it - but the row should not keep showing up in the stock list
+        as if the product still existed, so rows of deactivated variants are hidden
+        unless asked for.
       parameters:
       - in: query
         name: below_reorder_point
@@ -2484,6 +2489,10 @@ paths:
           type: boolean
       - in: query
         name: in_stock
+        schema:
+          type: boolean
+      - in: query
+        name: is_active
         schema:
           type: boolean
       - in: query
@@ -2545,6 +2554,11 @@ paths:
         Stock only changes through movements; allowing a PATCH on quantity would
         reintroduce exactly the untraceable `stock -= n` this design removes.
         Only `reorder_point` is editable.
+
+        A deleted product leaves its balance row behind at zero - the ledger is
+        rebuilt from it - but the row should not keep showing up in the stock list
+        as if the product still existed, so rows of deactivated variants are hidden
+        unless asked for.
       parameters:
       - in: path
         name: id
@@ -2572,6 +2586,11 @@ paths:
         Stock only changes through movements; allowing a PATCH on quantity would
         reintroduce exactly the untraceable `stock -= n` this design removes.
         Only `reorder_point` is editable.
+
+        A deleted product leaves its balance row behind at zero - the ledger is
+        rebuilt from it - but the row should not keep showing up in the stock list
+        as if the product still existed, so rows of deactivated variants are hidden
+        unless asked for.
       parameters:
       - in: path
         name: id
@@ -2610,6 +2629,11 @@ paths:
         Stock only changes through movements; allowing a PATCH on quantity would
         reintroduce exactly the untraceable `stock -= n` this design removes.
         Only `reorder_point` is editable.
+
+        A deleted product leaves its balance row behind at zero - the ledger is
+        rebuilt from it - but the row should not keep showing up in the stock list
+        as if the product still existed, so rows of deactivated variants are hidden
+        unless asked for.
       parameters:
       - in: path
         name: id
@@ -3112,12 +3136,11 @@ paths:
     get:
       operationId: products_list
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The commercial concept, with its variants written inline.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates: sales and the inventory ledger point here and must
+        stay readable. A deactivated product drops out of this list and its stock
+        is taken down to zero; `?include_inactive=true` brings it back for reports.
       parameters:
       - in: query
         name: brand
@@ -3171,12 +3194,11 @@ paths:
     post:
       operationId: products_create
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The commercial concept, with its variants written inline.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates: sales and the inventory ledger point here and must
+        stay readable. A deactivated product drops out of this list and its stock
+        is taken down to zero; `?include_inactive=true` brings it back for reports.
       tags:
       - products
       requestBody:
@@ -3204,12 +3226,11 @@ paths:
     get:
       operationId: products_retrieve
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The commercial concept, with its variants written inline.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates: sales and the inventory ledger point here and must
+        stay readable. A deactivated product drops out of this list and its stock
+        is taken down to zero; `?include_inactive=true` brings it back for reports.
       parameters:
       - in: path
         name: id
@@ -3232,12 +3253,11 @@ paths:
     put:
       operationId: products_update
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The commercial concept, with its variants written inline.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates: sales and the inventory ledger point here and must
+        stay readable. A deactivated product drops out of this list and its stock
+        is taken down to zero; `?include_inactive=true` brings it back for reports.
       parameters:
       - in: path
         name: id
@@ -3272,12 +3292,11 @@ paths:
     patch:
       operationId: products_partial_update
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The commercial concept, with its variants written inline.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates: sales and the inventory ledger point here and must
+        stay readable. A deactivated product drops out of this list and its stock
+        is taken down to zero; `?include_inactive=true` brings it back for reports.
       parameters:
       - in: path
         name: id
@@ -3311,12 +3330,11 @@ paths:
     delete:
       operationId: products_destroy
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The commercial concept, with its variants written inline.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates: sales and the inventory ledger point here and must
+        stay readable. A deactivated product drops out of this list and its stock
+        is taken down to zero; `?include_inactive=true` brings it back for reports.
       parameters:
       - in: path
         name: id
@@ -4800,12 +4818,10 @@ paths:
     get:
       operationId: variants_list
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       parameters:
       - in: query
         name: brand
@@ -4872,12 +4888,10 @@ paths:
     post:
       operationId: variants_create
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       tags:
       - variants
       requestBody:
@@ -4905,12 +4919,10 @@ paths:
     get:
       operationId: variants_retrieve
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       parameters:
       - in: path
         name: id
@@ -4933,12 +4945,10 @@ paths:
     put:
       operationId: variants_update
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       parameters:
       - in: path
         name: id
@@ -4973,12 +4983,10 @@ paths:
     patch:
       operationId: variants_partial_update
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       parameters:
       - in: path
         name: id
@@ -5012,12 +5020,10 @@ paths:
     delete:
       operationId: variants_destroy
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       parameters:
       - in: path
         name: id
@@ -5058,12 +5064,10 @@ paths:
     get:
       operationId: variants_summary_retrieve
       description: |-
-        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
+        The sellable, stockable unit: a size and colour of a product.
 
-        A row stays in the database after "delete" because sales/inventory history
-        references it, but a plain list call should not resurface it. Pass
-        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
-        to see it anyway, e.g. for reports.
+        Deleting deactivates it and zeroes its stock, same as with a product;
+        `?include_inactive=true` still lists it.
       tags:
       - variants
       security:
