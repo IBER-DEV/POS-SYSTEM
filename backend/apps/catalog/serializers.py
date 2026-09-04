@@ -99,6 +99,38 @@ class ProductSerializer(TenantModelSerializer):
         skus = [v["sku"] for v in value if v.get("sku")]
         if len(skus) != len(set(skus)):
             raise serializers.ValidationError("Duplicate SKU in the submitted variants.")
+
+        barcodes = [v["barcode"] for v in value if v.get("barcode")]
+        if len(barcodes) != len(set(barcodes)):
+            raise serializers.ValidationError("Duplicate barcode in the submitted variants.")
+
+        # A SKU/barcode is unique across the whole business, not just within
+        # this product - two products can otherwise land on the same code
+        # (e.g. both built from "category + color + size") and the second one
+        # would fail on the database constraint instead of a readable error.
+        own_variant_ids = (
+            {v.pk for v in self.instance.variants.all()} if self.instance is not None else set()
+        )
+        if skus:
+            taken = set(
+                ProductVariant.objects.filter(sku__in=skus)
+                .exclude(pk__in=own_variant_ids)
+                .values_list("sku", flat=True)
+            )
+            if taken:
+                raise serializers.ValidationError(
+                    {"sku": f"Ya existe en este negocio: {', '.join(sorted(taken))}."}
+                )
+        if barcodes:
+            taken = set(
+                ProductVariant.objects.filter(barcode__in=barcodes)
+                .exclude(pk__in=own_variant_ids)
+                .values_list("barcode", flat=True)
+            )
+            if taken:
+                raise serializers.ValidationError(
+                    {"barcode": f"Ya existe en este negocio: {', '.join(sorted(taken))}."}
+                )
         return value
 
     @transaction.atomic
