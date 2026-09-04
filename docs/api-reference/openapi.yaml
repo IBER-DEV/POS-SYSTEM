@@ -4,31 +4,6 @@ info:
   version: 1.0.0
   description: Multi-tenant backend for fashion retail point of sale.
 paths:
-  /api/v1/auth/device/staff/:
-    get:
-      operationId: auth_device_staff_retrieve
-      description: |-
-        El personal de la caja que pregunta, para su pantalla de bloqueo.
-
-        La credencial es el token del dispositivo: la caja ya demostró a qué negocio
-        pertenece, así que puede pintar los botones con los que su gente entra y
-        nadie tiene que escribir un usuario en un teclado alfabético cada turno.
-
-        Devuelve nombres, nunca secretos. Quien robe el token de una caja aprende
-        quiénes trabajan en esa tienda, y sigue necesitando un PIN con el bloqueo
-        por membresía intacto. Es el mismo trato que hace cualquier POS con pantalla
-        de bloqueo, y aquí es deliberado.
-      tags:
-      - auth
-      security:
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeviceStaff'
-          description: ''
   /api/v1/auth/invitations/{token}/:
     get:
       operationId: auth_invitations_retrieve
@@ -81,7 +56,7 @@ paths:
     post:
       operationId: auth_login_create
       description: |-
-        Iniciar sesión, por cualquiera de los tres caminos.
+        Iniciar sesión, por cualquiera de los dos caminos.
 
         El orden importa: si la petición dice de qué negocio se trata (terminal
         registrada o slug), se resuelve ahí mismo y se devuelve una sesión. Solo
@@ -1685,14 +1660,14 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/v1/employees/{id}/reset-pin/:
+  /api/v1/employees/{id}/unlock/:
     post:
-      operationId: employees_reset_pin_create
+      operationId: employees_unlock_create
       description: |-
-        Entrega un PIN nuevo y levanta cualquier bloqueo.
+        Levanta el bloqueo por intentos fallidos.
 
-        Esta es toda la recuperación para el personal de mostrador: sin correo
-        y sin enlace, el dueño emite un PIN nuevo en el momento.
+        Es la única recuperación para el personal de mostrador: sin correo y
+        sin enlace, el dueño la levanta en el momento.
       parameters:
       - in: path
         name: id
@@ -1707,6 +1682,464 @@ paths:
       - organizationJWT: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+          description: ''
+  /api/v1/expense-categories/:
+    get:
+      operationId: expense_categories_list
+      description: |-
+        Shared behaviour for every tenant-scoped endpoint.
+
+        The queryset is already filtered by the TenantManager; this mixin adds the
+        capability check and injects the organization on write.
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Qué campo usar para ordenar los resultados.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: Un término de búsqueda.
+        schema:
+          type: string
+      tags:
+      - expense-categories
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExpenseCategoryList'
+          description: ''
+    post:
+      operationId: expense_categories_create
+      description: |-
+        Shared behaviour for every tenant-scoped endpoint.
+
+        The queryset is already filtered by the TenantManager; this mixin adds the
+        capability check and injects the organization on write.
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+        required: true
+      security:
+      - organizationJWT: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+  /api/v1/expense-categories/{id}/:
+    get:
+      operationId: expense_categories_retrieve
+      description: |-
+        Shared behaviour for every tenant-scoped endpoint.
+
+        The queryset is already filtered by the TenantManager; this mixin adds the
+        capability check and injects the organization on write.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense category.
+        required: true
+      tags:
+      - expense-categories
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    put:
+      operationId: expense_categories_update
+      description: |-
+        Shared behaviour for every tenant-scoped endpoint.
+
+        The queryset is already filtered by the TenantManager; this mixin adds the
+        capability check and injects the organization on write.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense category.
+        required: true
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+        required: true
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    patch:
+      operationId: expense_categories_partial_update
+      description: |-
+        Shared behaviour for every tenant-scoped endpoint.
+
+        The queryset is already filtered by the TenantManager; this mixin adds the
+        capability check and injects the organization on write.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense category.
+        required: true
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategoryRequest'
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    delete:
+      operationId: expense_categories_destroy
+      description: |-
+        Shared behaviour for every tenant-scoped endpoint.
+
+        The queryset is already filtered by the TenantManager; this mixin adds the
+        capability check and injects the organization on write.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense category.
+        required: true
+      tags:
+      - expense-categories
+      security:
+      - organizationJWT: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expenses/:
+    get:
+      operationId: expenses_list
+      description: |-
+        Money out that is not merchandise.
+
+        Creating goes through the service, not the serializer, because a cash
+        expense also has to leave the drawer - and both writes belong to the same
+        transaction.
+      parameters:
+      - in: query
+        name: cash_session
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: category
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: location
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: min_amount
+        schema:
+          type: number
+      - in: query
+        name: occurred_from
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: occurred_to
+        schema:
+          type: string
+          format: date-time
+      - name: ordering
+        required: false
+        in: query
+        description: Qué campo usar para ordenar los resultados.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      - in: query
+        name: payment_method
+        schema:
+          type: string
+          enum:
+          - CARD
+          - CASH
+          - OTHER
+          - TRANSFER
+        description: |-
+          * `CASH` - Efectivo
+          * `CARD` - Tarjeta
+          * `TRANSFER` - Transferencia
+          * `OTHER` - Otro
+      - name: search
+        required: false
+        in: query
+        description: Un término de búsqueda.
+        schema:
+          type: string
+      - in: query
+        name: supplier
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - expenses
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExpenseList'
+          description: ''
+    post:
+      operationId: expenses_create
+      description: |-
+        Money out that is not merchandise.
+
+        Creating goes through the service, not the serializer, because a cash
+        expense also has to leave the drawer - and both writes belong to the same
+        transaction.
+      tags:
+      - expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCreateRequest'
+        required: true
+      security:
+      - organizationJWT: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+  /api/v1/expenses/{id}/:
+    get:
+      operationId: expenses_retrieve
+      description: |-
+        Money out that is not merchandise.
+
+        Creating goes through the service, not the serializer, because a cash
+        expense also has to leave the drawer - and both writes belong to the same
+        transaction.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense.
+        required: true
+      tags:
+      - expenses
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+    put:
+      operationId: expenses_update
+      description: |-
+        Money out that is not merchandise.
+
+        Creating goes through the service, not the serializer, because a cash
+        expense also has to leave the drawer - and both writes belong to the same
+        transaction.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense.
+        required: true
+      tags:
+      - expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseUpdateRequest'
+        required: true
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseUpdate'
+          description: ''
+    patch:
+      operationId: expenses_partial_update
+      description: |-
+        Money out that is not merchandise.
+
+        Creating goes through the service, not the serializer, because a cash
+        expense also has to leave the drawer - and both writes belong to the same
+        transaction.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense.
+        required: true
+      tags:
+      - expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseUpdateRequest'
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseUpdate'
+          description: ''
+    delete:
+      operationId: expenses_destroy
+      description: |-
+        Money out that is not merchandise.
+
+        Creating goes through the service, not the serializer, because a cash
+        expense also has to leave the drawer - and both writes belong to the same
+        transaction.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este expense.
+        required: true
+      tags:
+      - expenses
+      security:
+      - organizationJWT: []
+      responses:
+        '204':
           description: No response body
   /api/v1/health/:
     get:
@@ -2679,10 +3112,12 @@ paths:
     get:
       operationId: products_list
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: query
         name: brand
@@ -2736,10 +3171,12 @@ paths:
     post:
       operationId: products_create
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       tags:
       - products
       requestBody:
@@ -2767,10 +3204,12 @@ paths:
     get:
       operationId: products_retrieve
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -2793,10 +3232,12 @@ paths:
     put:
       operationId: products_update
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -2831,10 +3272,12 @@ paths:
     patch:
       operationId: products_partial_update
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -2868,10 +3311,12 @@ paths:
     delete:
       operationId: products_destroy
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -3261,6 +3706,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/CashSessionsReport'
           description: ''
+  /api/v1/reports/dashboard/:
+    get:
+      operationId: reports_dashboard_retrieve
+      description: Every headline figure of the reports page, in one request.
+      parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: ISO-8601 start. Defaults to 30 days ago.
+      - in: query
+        name: location
+        schema:
+          type: string
+        description: Restrict to one location.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: ISO-8601 end. Defaults to now.
+      - in: query
+        name: top_limit
+        schema:
+          type: integer
+        description: Top products to include. Default 5.
+      tags:
+      - reports
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+          description: ''
+  /api/v1/reports/expenses/:
+    get:
+      operationId: reports_expenses_retrieve
+      description: Read-only aggregates. Every figure is derived, never stored.
+      parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: ISO-8601 start. Defaults to 30 days ago.
+      - in: query
+        name: location
+        schema:
+          type: string
+        description: Restrict to one location.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: ISO-8601 end. Defaults to now.
+      tags:
+      - reports
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpensesSummary'
+          description: ''
   /api/v1/reports/inventory-valuation/:
     get:
       operationId: reports_inventory_valuation_retrieve
@@ -3311,6 +3823,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Margin'
+          description: ''
+  /api/v1/reports/profit/:
+    get:
+      operationId: reports_profit_retrieve
+      description: Revenue, cost of goods and operating expenses down to what is left.
+      parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: ISO-8601 start. Defaults to 30 days ago.
+      - in: query
+        name: location
+        schema:
+          type: string
+        description: Restrict to one location.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: ISO-8601 end. Defaults to now.
+      tags:
+      - reports
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profit'
           description: ''
   /api/v1/reports/refunds/:
     get:
@@ -4257,10 +4800,12 @@ paths:
     get:
       operationId: variants_list
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: query
         name: brand
@@ -4327,10 +4872,12 @@ paths:
     post:
       operationId: variants_create
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       tags:
       - variants
       requestBody:
@@ -4358,10 +4905,12 @@ paths:
     get:
       operationId: variants_retrieve
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -4384,10 +4933,12 @@ paths:
     put:
       operationId: variants_update
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -4422,10 +4973,12 @@ paths:
     patch:
       operationId: variants_partial_update
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -4459,10 +5012,12 @@ paths:
     delete:
       operationId: variants_destroy
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       parameters:
       - in: path
         name: id
@@ -4503,10 +5058,12 @@ paths:
     get:
       operationId: variants_summary_retrieve
       description: |-
-        Shared behaviour for every tenant-scoped endpoint.
+        Hides soft-deleted (`is_active=False`) rows unless asked for explicitly.
 
-        The queryset is already filtered by the TenantManager; this mixin adds the
-        capability check and injects the organization on write.
+        A row stays in the database after "delete" because sales/inventory history
+        references it, but a plain list call should not resurface it. Pass
+        `?is_active=false` (or any `is_active` filter) or `?include_inactive=true`
+        to see it anyway, e.g. for reports.
       tags:
       - variants
       security:
@@ -5101,6 +5658,67 @@ components:
       - date
       - sales_count
       - total
+    DailyTotal:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - date
+      - total
+    Dashboard:
+      type: object
+      description: The whole reports landing page in one payload.
+      properties:
+        period:
+          $ref: '#/components/schemas/Period'
+        sales:
+          $ref: '#/components/schemas/SalesSummary'
+        profit:
+          $ref: '#/components/schemas/Profit'
+        refunds:
+          $ref: '#/components/schemas/RefundsSummary'
+        inventory:
+          $ref: '#/components/schemas/DashboardInventory'
+        top_products:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopProduct'
+      required:
+      - inventory
+      - period
+      - profit
+      - refunds
+      - sales
+      - top_products
+    DashboardInventory:
+      type: object
+      properties:
+        units_on_hand:
+          type: integer
+        cost_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        retail_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        negative_stock_count:
+          type: integer
+      required:
+      - cost_value
+      - negative_stock_count
+      - retail_value
+      - units_on_hand
     Device:
       type: object
       description: |-
@@ -5163,22 +5781,6 @@ components:
       - location
       - location_name
       - name
-    DeviceOrganization:
-      type: object
-      description: |-
-        Lo mínimo para rotular una caja. Deliberadamente no es OrganizationSerializer:
-        un token de dispositivo no tiene por qué exponer NIT ni configuración fiscal.
-      properties:
-        name:
-          type: string
-          readOnly: true
-        slug:
-          type: string
-          readOnly: true
-          pattern: ^[-a-zA-Z0-9_]+$
-      required:
-      - name
-      - slug
     DeviceRegistrationRequest:
       type: object
       description: Registering the same identifier twice updates the device, never
@@ -5246,56 +5848,6 @@ components:
       - identifier
       - location
       - name
-    DeviceStaff:
-      type: object
-      properties:
-        organization:
-          allOf:
-          - $ref: '#/components/schemas/DeviceOrganization'
-          readOnly: true
-        staff:
-          type: array
-          items:
-            $ref: '#/components/schemas/DeviceStaffMember'
-          readOnly: true
-      required:
-      - organization
-      - staff
-    DeviceStaffMember:
-      type: object
-      description: |-
-        Un botón de la pantalla de bloqueo de una caja.
-
-        Nombres, nunca secretos: es lo justo para que alguien se reconozca y toque
-        su casilla.
-      properties:
-        membership:
-          type: string
-          format: uuid
-          readOnly: true
-        username:
-          type: string
-          readOnly: true
-        full_name:
-          type: string
-          readOnly: true
-        role:
-          allOf:
-          - $ref: '#/components/schemas/MembershipRoleEnum'
-          readOnly: true
-        has_pin:
-          type: boolean
-          readOnly: true
-        is_locked:
-          type: boolean
-          readOnly: true
-      required:
-      - full_name
-      - has_pin
-      - is_locked
-      - membership
-      - role
-      - username
     DocumentTypeEnum:
       enum:
       - CC
@@ -5387,10 +5939,11 @@ components:
       description: |-
         Alta directa, en el mostrador.
 
-        Sin correo, sin invitación y sin aceptación: la cuenta existe y funciona en
-        cuanto esto responde. El PIN vuelve en claro una sola vez para que el dueño
-        pueda entregarlo. Si se indica un correo que ya tiene cuenta, se vincula esa
-        persona en vez de crear otra.
+        Sin invitación y sin aceptación: la cuenta existe y funciona en cuanto esto
+        responde, con el usuario y la contraseña que el dueño le asigna aquí mismo.
+        El correo es obligatorio porque es con lo que esta persona inicia sesión;
+        si ya tiene cuenta con ese correo, se vincula esa persona en vez de crear
+        otra.
       properties:
         username:
           type: string
@@ -5406,18 +5959,15 @@ components:
           maxLength: 80
         role:
           $ref: '#/components/schemas/MembershipRoleEnum'
-        pin:
-          type: string
-          writeOnly: true
-          description: 4 a 6 dígitos. Se genera automáticamente si se omite.
-          pattern: ^\d{4,6}$
         password:
           type: string
           writeOnly: true
-          description: Opcional. Solo para quien además entre desde un navegador.
+          minLength: 1
+          description: Contraseña con la que este empleado inicia sesión.
         email:
           type: string
           format: email
+          minLength: 1
         phone:
           type: string
           maxLength: 30
@@ -5426,7 +5976,9 @@ components:
           format: uuid
           nullable: true
       required:
+      - email
       - first_name
+      - password
       - role
       - username
     EmployeeUpdate:
@@ -5476,6 +6028,304 @@ components:
           nullable: true
       required:
       - username
+    Expense:
+      type: object
+      description: How an expense reads back. Written through ExpenseCreateSerializer.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category:
+          type: string
+          format: uuid
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        location:
+          type: string
+          format: uuid
+          readOnly: true
+        location_name:
+          type: string
+          readOnly: true
+        supplier:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        supplier_name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cash_session:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        paid_from_drawer:
+          type: boolean
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+          description: Invoice or receipt number.
+        note:
+          type: string
+          readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - cash_session
+      - category
+      - category_name
+      - created_at
+      - created_by
+      - description
+      - id
+      - location
+      - location_name
+      - note
+      - occurred_at
+      - paid_from_drawer
+      - payment_method
+      - reference
+      - supplier
+      - supplier_name
+    ExpenseCategory:
+      type: object
+      description: |-
+        Base serializer for tenant-owned models.
+
+        Overriding `serializer_related_field` makes every auto-generated relation
+        tenant-scoped, so isolation does not depend on each developer remembering
+        to scope a nested id by hand. `organization` is never writable: it comes
+        from the authenticated context.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+    ExpenseCategoryRequest:
+      type: object
+      description: |-
+        Base serializer for tenant-owned models.
+
+        Overriding `serializer_related_field` makes every auto-generated relation
+        tenant-scoped, so isolation does not depend on each developer remembering
+        to scope a nested id by hand. `organization` is never writable: it comes
+        from the authenticated context.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        is_active:
+          type: boolean
+      required:
+      - name
+    ExpenseCategoryTotal:
+      type: object
+      properties:
+        category:
+          type: string
+          format: uuid
+        name:
+          type: string
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - category
+      - name
+      - total
+    ExpenseCreateRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          format: uuid
+        location:
+          type: string
+          format: uuid
+        supplier:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          minLength: 1
+          maxLength: 240
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          default: CASH
+        occurred_at:
+          type: string
+          format: date-time
+        cash_session:
+          type: string
+          format: uuid
+          nullable: true
+          description: Which drawer the cash came out of. Only needed when two tills
+            are open.
+        reference:
+          type: string
+          maxLength: 80
+        note:
+          type: string
+      required:
+      - amount
+      - category
+      - description
+    ExpenseUpdate:
+      type: object
+      description: |-
+        Only what can change without moving money.
+
+        The amount and the payment method are not editable: both would have to
+        rewrite a drawer movement that an arqueo may already have counted. Delete
+        the expense while the shift is open, or correct it with a cash adjustment.
+      properties:
+        category:
+          type: string
+          format: uuid
+        supplier:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          maxLength: 240
+        reference:
+          type: string
+          description: Invoice or receipt number.
+          maxLength: 80
+        note:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+      required:
+      - category
+      - description
+      - occurred_at
+    ExpenseUpdateRequest:
+      type: object
+      description: |-
+        Only what can change without moving money.
+
+        The amount and the payment method are not editable: both would have to
+        rewrite a drawer movement that an arqueo may already have counted. Delete
+        the expense while the shift is open, or correct it with a cash adjustment.
+      properties:
+        category:
+          type: string
+          format: uuid
+        supplier:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          minLength: 1
+          maxLength: 240
+        reference:
+          type: string
+          description: Invoice or receipt number.
+          maxLength: 80
+        note:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+      required:
+      - category
+      - description
+      - occurred_at
+    ExpensesSummary:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/Period'
+        expenses_count:
+          type: integer
+        expenses_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        paid_from_drawer:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        by_category:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCategoryTotal'
+        by_method:
+          type: object
+          additionalProperties:
+            type: string
+            format: decimal
+            pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+            readOnly: true
+        by_day:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyTotal'
+      required:
+      - by_category
+      - by_day
+      - by_method
+      - expenses_count
+      - expenses_total
+      - paid_from_drawer
+      - period
     InitialStockRequest:
       type: object
       description: Shared payload for manual adjustments and initial stock loads.
@@ -5708,10 +6558,6 @@ components:
           writeOnly: true
           description: Obligatoria si aún no tienes cuenta; se ignora si ya tienes
             una.
-        pin:
-          type: string
-          writeOnly: true
-          pattern: ^\d{4,6}$
         first_name:
           type: string
           maxLength: 80
@@ -5845,12 +6691,11 @@ components:
     LoginRequest:
       type: object
       description: |-
-        Tres formas de entrar, una sola forma de pedirlo.
+        Dos formas de entrar, una sola forma de pedirlo.
 
         - Identidad global: `email` + `password`. Devuelve la lista de negocios.
-        - Negocio explícito: `organization` (slug) + `username` + `password`/`pin`.
-        - Terminal registrada: `username` + `pin` con la cabecera X-Device-Token,
-          porque la caja ya sabe a qué tienda pertenece.
+        - Negocio explícito: `organization` (slug, o resuelto por una terminal
+          registrada vía X-Device-Token) + `username` + `password`.
       properties:
         email:
           type: string
@@ -5862,9 +6707,6 @@ components:
           type: string
           maxLength: 40
         password:
-          type: string
-          writeOnly: true
-        pin:
           type: string
           writeOnly: true
     Margin:
@@ -6348,6 +7190,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Employee'
+    PaginatedExpenseCategoryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCategory'
+    PaginatedExpenseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Expense'
     PaginatedInventoryMovementList:
       type: object
       required:
@@ -6801,6 +7689,51 @@ components:
           type: string
           format: uuid
           nullable: true
+    PatchedExpenseCategoryRequest:
+      type: object
+      description: |-
+        Base serializer for tenant-owned models.
+
+        Overriding `serializer_related_field` makes every auto-generated relation
+        tenant-scoped, so isolation does not depend on each developer remembering
+        to scope a nested id by hand. `organization` is never writable: it comes
+        from the authenticated context.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        is_active:
+          type: boolean
+    PatchedExpenseUpdateRequest:
+      type: object
+      description: |-
+        Only what can change without moving money.
+
+        The amount and the payment method are not editable: both would have to
+        rewrite a drawer movement that an arqueo may already have counted. Delete
+        the expense while the shift is open, or correct it with a cash adjustment.
+      properties:
+        category:
+          type: string
+          format: uuid
+        supplier:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          minLength: 1
+          maxLength: 240
+        reference:
+          type: string
+          description: Invoice or receipt number.
+          maxLength: 80
+        note:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
     PatchedLocationRequest:
       type: object
       description: |-
@@ -7356,6 +8289,54 @@ components:
       - price
       - product
       - sku
+    Profit:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/Period'
+        revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        cost_of_goods:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        gross_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        expenses_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        expenses_by_category:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCategoryTotal'
+        net_profit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+        net_margin_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - cost_of_goods
+      - expenses_by_category
+      - expenses_total
+      - gross_profit
+      - net_margin_percent
+      - net_profit
+      - period
+      - revenue
     Purchase:
       type: object
       description: |-
@@ -7384,6 +8365,7 @@ components:
           type: string
           format: uuid
           readOnly: true
+          nullable: true
         supplier_name:
           type: string
           readOnly: true
@@ -7456,6 +8438,7 @@ components:
         supplier:
           type: string
           format: uuid
+          nullable: true
         supplier_invoice:
           type: string
           maxLength: 40
@@ -7475,7 +8458,6 @@ components:
             store.
       required:
       - items
-      - supplier
     PurchaseItem:
       type: object
       description: |-

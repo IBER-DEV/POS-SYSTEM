@@ -39,6 +39,10 @@ SALES_REFUND = "sales.refund"
 CUSTOMERS_READ = "customers.read"
 CUSTOMERS_WRITE = "customers.write"
 
+# Expenses
+EXPENSES_READ = "expenses.read"
+EXPENSES_WRITE = "expenses.write"
+
 # Cash
 CASH_READ = "cash.read"
 CASH_OPEN = "cash.open"
@@ -74,6 +78,8 @@ _MANAGER_CAPABILITIES = frozenset(
         SALES_REFUND,
         CUSTOMERS_READ,
         CUSTOMERS_WRITE,
+        EXPENSES_READ,
+        EXPENSES_WRITE,
         CASH_READ,
         CASH_OPEN,
         CASH_CLOSE,

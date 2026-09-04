@@ -101,5 +101,55 @@ class RefundsSummarySerializer(serializers.Serializer):
     written_off_count = serializers.IntegerField()
 
 
+class ExpenseCategoryTotalSerializer(serializers.Serializer):
+    category = serializers.UUIDField()
+    name = serializers.CharField()
+    total = MoneyField()
+
+
+class DailyTotalSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    total = MoneyField()
+
+
+class ExpensesSummarySerializer(serializers.Serializer):
+    period = PeriodSerializer()
+    expenses_count = serializers.IntegerField()
+    expenses_total = MoneyField()
+    paid_from_drawer = MoneyField()
+    by_category = ExpenseCategoryTotalSerializer(many=True)
+    by_method = serializers.DictField(child=MoneyField())
+    by_day = DailyTotalSerializer(many=True)
+
+
+class ProfitSerializer(serializers.Serializer):
+    period = PeriodSerializer()
+    revenue = MoneyField()
+    cost_of_goods = MoneyField()
+    gross_profit = MoneyField()
+    expenses_total = MoneyField()
+    expenses_by_category = ExpenseCategoryTotalSerializer(many=True)
+    net_profit = MoneyField()
+    net_margin_percent = MoneyField()
+
+
+class DashboardInventorySerializer(serializers.Serializer):
+    units_on_hand = serializers.IntegerField()
+    cost_value = MoneyField()
+    retail_value = MoneyField()
+    negative_stock_count = serializers.IntegerField()
+
+
+class DashboardSerializer(serializers.Serializer):
+    """The whole reports landing page in one payload."""
+
+    period = PeriodSerializer()
+    sales = SalesSummarySerializer()
+    profit = ProfitSerializer()
+    refunds = RefundsSummarySerializer()
+    inventory = DashboardInventorySerializer()
+    top_products = TopProductSerializer(many=True)
+
+
 class ReportIndexSerializer(serializers.Serializer):
     reports = serializers.ListField(child=serializers.CharField())

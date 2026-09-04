@@ -13,8 +13,11 @@ from apps.organizations.models import Location
 from . import selectors
 from .serializers import (
     CashSessionsReportSerializer,
+    DashboardSerializer,
+    ExpensesSummarySerializer,
     InventoryValuationSerializer,
     MarginSerializer,
+    ProfitSerializer,
     RefundsSummarySerializer,
     ReportIndexSerializer,
     SalesSummarySerializer,
@@ -116,15 +119,58 @@ class ReportViewSet(viewsets.ViewSet):
             )
         )
 
+    @extend_schema(parameters=PERIOD_PARAMS, responses={200: ExpensesSummarySerializer})
+    @action(detail=False, methods=["get"])
+    def expenses(self, request):
+        date_from, date_to = self._period(request)
+        return Response(
+            selectors.expenses_summary(
+                date_from=date_from, date_to=date_to, location=self._location(request)
+            )
+        )
+
+    @extend_schema(parameters=PERIOD_PARAMS, responses={200: ProfitSerializer})
+    @action(detail=False, methods=["get"])
+    def profit(self, request):
+        """Revenue, cost of goods and operating expenses down to what is left."""
+        date_from, date_to = self._period(request)
+        return Response(
+            selectors.profit_and_loss(
+                date_from=date_from, date_to=date_to, location=self._location(request)
+            )
+        )
+
+    @extend_schema(
+        parameters=PERIOD_PARAMS
+        + [OpenApiParameter("top_limit", int, description="Top products to include. Default 5.")],
+        responses={200: DashboardSerializer},
+    )
+    @action(detail=False, methods=["get"])
+    def dashboard(self, request):
+        """Every headline figure of the reports page, in one request."""
+        date_from, date_to = self._period(request)
+        top_limit = min(int(request.query_params.get("top_limit", 5)), 50)
+        return Response(
+            selectors.dashboard(
+                date_from=date_from,
+                date_to=date_to,
+                location=self._location(request),
+                top_limit=top_limit,
+            )
+        )
+
     @extend_schema(responses={200: ReportIndexSerializer})
     def list(self, request):
         """Index of the available reports, so a client can discover them."""
         return Response(
             {
                 "reports": [
+                    "dashboard",
                     "sales-summary",
                     "top-products",
                     "margin",
+                    "expenses",
+                    "profit",
                     "inventory-valuation",
                     "cash-sessions",
                     "refunds",

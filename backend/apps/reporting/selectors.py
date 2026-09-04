@@ -20,6 +20,7 @@ from django.utils import timezone
 from apps.cash.models import CashSession
 from apps.catalog.models import ProductVariant
 from apps.core.money import money
+from apps.expenses.models import Expense
 from apps.inventory.models import StockLevel
 from apps.sales.models import Payment, Refund, Sale, SaleItem
 
@@ -229,6 +230,88 @@ def cash_sessions_report(*, date_from, date_to, location=None) -> dict:
     }
 
 
+def expenses_summary(*, date_from, date_to, location=None) -> dict:
+    """Operating spend for the period, broken down the way the owner groups it.
+
+    Merchandise is not here: it enters as a Purchase and is counted as cost of
+    goods sold only when it is actually sold, so nothing is double counted.
+    """
+    expenses = Expense.objects.filter(occurred_at__gte=date_from, occurred_at__lte=date_to)
+    if location is not None:
+        expenses = expenses.filter(location=location)
+
+    totals = expenses.aggregate(
+        count=Count("id"),
+        total=Coalesce(Sum("amount"), ZERO, output_field=MONEY),
+        from_drawer=Coalesce(
+            Sum("amount", filter=Q(cash_session__isnull=False)), ZERO, output_field=MONEY
+        ),
+    )
+
+    by_category = [
+        {
+            "category": str(row["category_id"]),
+            "name": row["category__name"],
+            "total": money(row["total"]),
+        }
+        for row in expenses.values("category_id", "category__name")
+        .annotate(total=Sum("amount"))
+        .order_by("-total")
+    ]
+
+    by_method = {
+        row["payment_method"]: money(row["total"])
+        for row in expenses.values("payment_method").annotate(total=Sum("amount"))
+    }
+
+    by_day = [
+        {"date": row["day"], "total": money(row["total"])}
+        for row in expenses.annotate(day=TruncDate("occurred_at"))
+        .values("day")
+        .annotate(total=Sum("amount"))
+        .order_by("day")
+    ]
+
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "expenses_count": totals["count"],
+        "expenses_total": money(totals["total"]),
+        "paid_from_drawer": money(totals["from_drawer"]),
+        "by_category": by_category,
+        "by_method": by_method,
+        "by_day": by_day,
+    }
+
+
+def profit_and_loss(*, date_from, date_to, location=None) -> dict:
+    """The full line, from what came in to what is actually left.
+
+    Revenue is net of refunds; cost is the one frozen on each sale line; the
+    expenses are the operating ones. This is the only report in the module
+    that answers "how much did I really make", and the only one that can,
+    because it is the only one that knows what the business spent.
+    """
+    margin = margin_report(date_from=date_from, date_to=date_to, location=location)
+    expenses = expenses_summary(date_from=date_from, date_to=date_to, location=location)
+
+    gross_profit = margin["gross_profit"]
+    expenses_total = expenses["expenses_total"]
+    net_profit = money(gross_profit - expenses_total)
+
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "revenue": margin["revenue"],
+        "cost_of_goods": margin["cost"],
+        "gross_profit": gross_profit,
+        "expenses_total": expenses_total,
+        "expenses_by_category": expenses["by_category"],
+        "net_profit": net_profit,
+        "net_margin_percent": money(net_profit / margin["revenue"] * 100)
+        if margin["revenue"]
+        else ZERO,
+    }
+
+
 def refunds_summary(*, date_from, date_to, location=None) -> dict:
     refunds = Refund.objects.filter(occurred_at__gte=date_from, occurred_at__lte=date_to)
     if location is not None:
@@ -245,4 +328,32 @@ def refunds_summary(*, date_from, date_to, location=None) -> dict:
         "refunds_total": money(totals["total"]),
         "restocked_count": totals["restocked"],
         "written_off_count": totals["count"] - totals["restocked"],
+    }
+
+
+def dashboard(*, date_from, date_to, location=None, top_limit: int = 5) -> dict:
+    """Everything the reports landing page shows, in one round trip.
+
+    The page needs figures that all share one period and one location; fetching
+    them one endpoint at a time makes the client stitch a consistent picture
+    out of separate answers, and shows the user a page that fills in pieces.
+    Each block keeps the exact shape of its own endpoint, so drilling into the
+    detailed report means no second payload to learn.
+    """
+    inventory = inventory_valuation(location=location)
+
+    return {
+        "period": {"start": date_from, "end": date_to},
+        "sales": sales_summary(date_from=date_from, date_to=date_to, location=location),
+        "profit": profit_and_loss(date_from=date_from, date_to=date_to, location=location),
+        "refunds": refunds_summary(date_from=date_from, date_to=date_to, location=location),
+        "inventory": {
+            "units_on_hand": inventory["units_on_hand"],
+            "cost_value": inventory["cost_value"],
+            "retail_value": inventory["retail_value"],
+            "negative_stock_count": len(inventory["negative_stock"]),
+        },
+        "top_products": top_products(
+            date_from=date_from, date_to=date_to, location=location, limit=top_limit
+        ),
     }

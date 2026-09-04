@@ -13,7 +13,7 @@ designed so the second and the hundredth need no rewrite.
 |---|---|---|
 | 1 | Tenancy, auth, roles, catalog, ledger inventory, subscriptions, audit, idempotency | **done** |
 | 2 | Purchasing, Sales/POS, payments, customers, cash, refunds | **done** |
-| 3 | Offline sync, reporting, hardening | **done** — 158 tests green |
+| 3 | Offline sync, reporting, hardening | **done** — 172 tests green |
 
 ## Running it (Docker — first time)
 
@@ -225,6 +225,7 @@ backend/
     ├── customers/     Customer
     ├── purchasing/    Supplier, Purchase, PurchaseItem
     ├── cash/          CashRegister, CashSession, CashMovement
+    ├── expenses/      ExpenseCategory, Expense — operating spend, not merchandise
     ├── sales/         Sale, SaleItem, Payment, Refund, RefundItem
     ├── synchronization/  Device, SyncOperation — offline replay
     └── reporting/     read-only aggregates, no models of its own
@@ -250,12 +251,13 @@ money if they break:
 | `tests/test_refunds.py` | Never refund more than was sold, across successive refunds; rounding never strands money |
 | `tests/test_cash.py` | Only cash reaches the drawer; the arqueo adds up; a closed shift accepts nothing |
 | `tests/test_purchasing.py` | Receiving writes the ledger and moves the average cost; it cannot happen twice |
+| `tests/test_expenses.py` | A cash expense leaves the drawer so the arqueo still balances; net profit subtracts expenses from gross; the dashboard agrees with the separate reports |
 | `tests/test_concurrency.py` | **`slow`** — two registers on one unit, eight parallel sales, reversed lock order, simultaneous refunds |
 | `tests/test_sync.py` | Replaying an offline operation changes nothing; offline sales are accepted without stock and flagged; one bad operation does not sink the batch |
 | `tests/test_reporting.py` | Margins use the cost frozen at sale time; refunds are netted out |
 | `tests/test_subscription_gating.py` | A lapsed subscription blocks writes, never reads |
 
 ```bash
-pytest                 # 158 tests, ~14s
-pytest -m "not slow"   # 154 tests, ~7s — the loop to run while coding
+pytest                 # 172 tests, ~18s
+pytest -m "not slow"   # 168 tests, ~9s — the loop to run while coding
 ```

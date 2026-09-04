@@ -10,6 +10,20 @@ from apps.core.context import tenant_context
 
 from .models import Location, Organization
 
+# Con las que arranca cualquier tienda. Son solo un punto de partida: el dueño
+# las renombra, desactiva o amplía desde /expense-categories/.
+DEFAULT_EXPENSE_CATEGORIES = (
+    "Arriendo",
+    "Nómina",
+    "Servicios públicos",
+    "Transporte y domicilios",
+    "Aseo y papelería",
+    "Publicidad",
+    "Mantenimiento",
+    "Impuestos y comisiones bancarias",
+    "Otros",
+)
+
 
 def derive_username(*, organization, user, preferred: str | None = None) -> str:
     """Un nombre de usuario válido y libre dentro de este negocio.
@@ -78,6 +92,17 @@ def provision_organization(
             role=Membership.Role.OWNER,
             status=Membership.Status.ACTIVE,
             default_location=location,
+        )
+
+        from apps.expenses.models import ExpenseCategory
+
+        # Un negocio nuevo debe poder registrar un gasto sin configurar nada
+        # primero; son editables y desactivables como cualquier otra fila.
+        ExpenseCategory.objects.bulk_create(
+            [
+                ExpenseCategory(organization=organization, name=name)
+                for name in DEFAULT_EXPENSE_CATEGORIES
+            ]
         )
 
         from apps.subscriptions.services import start_trial_subscription

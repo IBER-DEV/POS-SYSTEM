@@ -364,6 +364,41 @@ Closing returns `expected_amount`, `counted_amount` and `difference`
 (positive = surplus). `summary/` adds totals by movement type and by payment
 method, so card and transfer are visible without polluting the drawer.
 
+### Expenses
+Operating spend only — rent, payroll, utilities, the delivery paid out of the
+drawer. Merchandise never comes through here: it enters as a `Purchase` and is
+counted as cost of goods sold when it sells, so nothing is counted twice.
+
+| Method | Path | Capability |
+|---|---|---|
+| CRUD | `/expense-categories/` | read `expenses.read` · write `expenses.write` |
+| GET | `/expenses/` `/expenses/{id}/` | `expenses.read` |
+| POST | `/expenses/` | `expenses.write` |
+| PATCH | `/expenses/{id}/` | `expenses.write` — category, description, reference, note, date |
+| DELETE | `/expenses/{id}/` | `expenses.write` — only while its shift is open |
+
+```json
+POST /api/v1/expenses/
+{"category": "<uuid>", "description": "Domicilio de la tarde",
+ "amount": "20000.00", "payment_method": "CASH"}
+```
+
+**A cash expense leaves the drawer.** When `payment_method` is `CASH` and a
+register is open at that location, the expense writes a `WITHDRAWAL` into the
+cash ledger and comes back with `cash_session` set and `paid_from_drawer: true`
+— the arqueo then balances on its own. With no open register it is still
+recorded (paid from a pocket or the safe) and `paid_from_drawer` is `false`.
+With **two** registers open at one location the request is rejected: pass
+`cash_session` to say which drawer the money came out of.
+
+Because the money already moved, `amount` and `payment_method` are immutable.
+A mistyped expense is deleted while its shift is still open; once the arqueo is
+closed, deletion returns 400 and the correction is a cash adjustment.
+
+A business is provisioned with nine editable default categories, so an expense
+can be recorded before anything is configured. Businesses created before this
+module existed start with none and define their own.
+
 ### Synchronization
 | Method | Path | Capability |
 |---|---|---|
@@ -420,15 +455,31 @@ reconcile.
 | Method | Path | Capability |
 |---|---|---|
 | GET | `/reports/` | `reports.read` — index of available reports |
+| GET | `/reports/dashboard/` | `reports.read` — the whole landing page in one payload |
 | GET | `/reports/sales-summary/` | `reports.read` |
 | GET | `/reports/top-products/` | `reports.read` |
-| GET | `/reports/margin/` | `reports.read` |
+| GET | `/reports/margin/` | `reports.read` — gross, before expenses |
+| GET | `/reports/expenses/` | `reports.read` — operating spend by category |
+| GET | `/reports/profit/` | `reports.read` — revenue → cost → expenses → **net** |
 | GET | `/reports/inventory-valuation/` | `reports.read` |
 | GET | `/reports/cash-sessions/` | `reports.read` |
 | GET | `/reports/refunds/` | `reports.read` |
 
 All accept `?from=` `?to=` (ISO-8601, default the last 30 days) and
-`?location=`. `top-products` also takes `?limit=` (default 10, max 100).
+`?location=`. `top-products` also takes `?limit=` (default 10, max 100), and
+`dashboard` takes `?top_limit=` (default 5, max 50).
+
+`dashboard` composes `sales`, `profit`, `refunds`, a condensed `inventory`
+block and `top_products` under one period, so the landing page is one request
+instead of five that each resolve "now" a few milliseconds apart. Each block
+keeps the exact shape of its own endpoint — drilling into the detail means no
+second payload to learn.
+
+`margin` is **gross** profit: revenue minus the cost of the goods. `profit`
+continues the line down to `net_profit` by subtracting operating expenses, and
+is the only report that answers "how much did I actually make". Label them
+accordingly in the UI: showing gross profit as "ganancia" hides exactly the
+costs that weigh most.
 
 Margins use the cost frozen on each sale line, so a report about a past period
 does not move when later purchases change the average cost. Units are net of

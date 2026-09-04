@@ -221,6 +221,43 @@ expected_amount = SUM(CashMovement.amount)   for the session
 difference      = counted_amount - expected_amount
 ```
 
+## Expenses
+
+### ExpenseCategory
+How one business groups its spending: `name`, `is_active`, unique per
+organization. Nine defaults are created with the organization (Arriendo,
+Nómina, Servicios públicos…) so nothing has to be configured before the first
+expense. Deactivated rather than deleted, because expenses point here with
+PROTECT and old reports must stay readable.
+
+### Expense
+One payment out that is **not** merchandise: `category`, `location`, optional
+`supplier`, `description`, `amount` (always positive), `payment_method`,
+`occurred_at`, `reference` and `note`.
+
+Merchandise never appears here. It enters as a `Purchase` and is counted as
+cost of goods sold when it is actually sold, so counting it as an expense too
+would subtract it twice from the same profit.
+
+A cash expense is not just a record — the money left the drawer. It writes a
+`WITHDRAWAL` into the cash ledger and stores the `cash_session` it came from,
+so the arqueo accounts for it without anyone remembering to register a
+withdrawal by hand. With no open register it is still recorded, with
+`cash_session` null: the owner paid it from elsewhere, and refusing it would
+only push the figure out of the system.
+
+`amount` and `payment_method` are immutable once written, for the same reason
+the ledger is append-only: they would rewrite a drawer movement an arqueo may
+already have counted. Deletion is allowed only while that shift is open.
+
+```
+gross_profit = revenue - cost_of_goods       (margin report)
+net_profit   = gross_profit - expenses       (profit report)
+```
+
+Only the second one answers "how much did I make". It could not exist before
+this model did.
+
 ## Sales
 
 ### Sale
