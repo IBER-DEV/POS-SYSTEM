@@ -209,6 +209,7 @@ Staff live under `/employees/` and `/invitations/` — see
 | Method | Path | Capability |
 |---|---|---|
 | CRUD | `/categories/` `/brands/` `/products/` `/variants/` | read `products.read` · write `products.write` |
+| POST/DELETE | `/products/{id}/photo/` | `products.write` — the product's one photo |
 | GET | `/variants/lookup/?barcode=` | `products.read` — POS scan; falls back to exact SKU |
 
 `POST /products/` accepts nested variants:
@@ -225,6 +226,25 @@ Staff live under `/employees/` and `/invitations/` — see
 deleted. `DELETE` deactivates the product and its variants.
 
 Filters: `?category=` `?brand=` `?is_active=` `?size=` `?color=` `?search=`.
+
+**Photo.** One per product, not a gallery — a small shop photographs a garment
+once. It never travels in the plain JSON body; upload or replace it with
+`multipart/form-data`:
+
+```
+POST /api/v1/products/{id}/photo/
+Content-Type: multipart/form-data
+
+image: <file>
+```
+
+JPEG/PNG/WEBP only, 4MB max (a clean 400 either way — never Django's generic
+"request too large"). Re-uploading deletes the previous file from disk before
+storing the new one. `DELETE /products/{id}/photo/` removes it. `image` on the
+product comes back as `null` until one is uploaded, and as a full URL once it
+exists — read straight off `GET`/`POST`/`PATCH /products/`, no extra call
+needed. Files are served straight off local disk for now (`MEDIA_URL`), which
+will move behind object storage before this scales past one node.
 
 ### Inventory
 | Method | Path | Capability |

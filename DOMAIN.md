@@ -70,10 +70,18 @@ movement, cash session and sale carries it anyway.
 
 ### Product
 The commercial concept — "Nike Air Max". **Never sold, never stocked.** Holds
-name, description, category, brand, `tax_rate` and `track_inventory`.
+name, description, category, brand, `tax_rate`, `track_inventory` and `image`.
 
 `tax_rate` sits on Product rather than Variant: size 39 and size 40 of the same
 shoe are never taxed differently.
+
+`image` is one photo, not a gallery per colour or per variant — a small shop
+photographs a garment once, and that is what staff and customers need to
+recognise it. It is written only through `POST /products/{id}/photo/`
+(multipart), never through the plain create/update body, and stored on local
+disk for now (`apps/catalog/models.py:product_photo_path`), one file per
+product named by a random id so a re-upload can never collide with the one it
+replaces.
 
 ### ProductVariant
 The sellable, stockable unit.

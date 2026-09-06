@@ -1,7 +1,13 @@
+import tempfile
+
 from .base import *  # noqa: F403
 
 DEBUG = False
 ALLOWED_HOSTS = ["*"]
+
+# Uploaded test files (product photos) go to a throwaway directory, never
+# into the real media/ tree the dev server serves from.
+MEDIA_ROOT = tempfile.mkdtemp(prefix="pos-test-media-")
 
 # Fast, deterministic hashing keeps the business-rule suite quick.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

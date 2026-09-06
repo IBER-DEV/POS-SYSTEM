@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.docs import ApiReferenceView
@@ -32,4 +34,13 @@ urlpatterns = [
         name="swagger-ui",
     ),
     path("api/v1/reference/", ApiReferenceView.as_view(), name="api-reference"),
+    # Uploaded files (product photos) live on local disk for now - there is no
+    # CDN or object storage in front of this yet, so Django serves them
+    # itself, unlike static/ which whitenoise already handles. Move this to
+    # S3/Cloudinary + django-storages before scaling past one node.
+    path(
+        f"{settings.MEDIA_URL.lstrip('/')}<path:path>",
+        serve,
+        {"document_root": settings.MEDIA_ROOT},
+    ),
 ]

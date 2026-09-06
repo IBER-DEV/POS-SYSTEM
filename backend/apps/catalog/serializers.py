@@ -72,10 +72,33 @@ class NestedVariantSerializer(TenantModelSerializer):
         ]
 
 
+MAX_PHOTO_SIZE = 4 * 1024 * 1024  # Under DATA_UPLOAD_MAX_MEMORY_SIZE (5MB), so
+# an oversized file fails here with a clean message rather than as Django's
+# generic "request body too large".
+ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+class ProductPhotoSerializer(serializers.Serializer):
+    image = serializers.ImageField()
+
+    def validate_image(self, value):
+        if value.size > MAX_PHOTO_SIZE:
+            raise serializers.ValidationError(
+                f"La imagen no puede pesar más de {MAX_PHOTO_SIZE // (1024 * 1024)}MB."
+            )
+        if value.content_type not in ALLOWED_PHOTO_TYPES:
+            raise serializers.ValidationError("Formato no soportado. Usa JPEG, PNG o WEBP.")
+        return value
+
+
 class ProductSerializer(TenantModelSerializer):
     variants = NestedVariantSerializer(many=True, required=False)
     category_name = serializers.CharField(source="category.name", read_only=True, default=None)
     brand_name = serializers.CharField(source="brand.name", read_only=True, default=None)
+    # Read-only here on purpose: a file does not travel in the same JSON body
+    # as the nested variants. Upload/replace through the dedicated `photo`
+    # action, which accepts multipart form data.
+    image = serializers.ImageField(read_only=True)
 
     class Meta:
         model = Product
@@ -90,6 +113,7 @@ class ProductSerializer(TenantModelSerializer):
             "tax_rate",
             "track_inventory",
             "is_active",
+            "image",
             "variants",
             "created_at",
         ]

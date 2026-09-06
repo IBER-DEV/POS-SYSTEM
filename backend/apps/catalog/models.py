@@ -7,10 +7,19 @@ price, cost and inventory.
 """
 from __future__ import annotations
 
+import uuid
+
 from django.core.validators import MinValueValidator
 from django.db import models
 
 from apps.core.models import TenantScopedModel
+
+
+def product_photo_path(instance: Product, filename: str) -> str:
+    """One photo per product. A random name avoids leaking the original
+    filename and colliding with a re-upload while the old file is deleted."""
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+    return f"products/{instance.organization_id}/{uuid.uuid4().hex}.{extension}"
 
 
 class Category(TenantScopedModel):
@@ -69,6 +78,11 @@ class Product(TenantScopedModel):
         default=True, help_text="False for services or made-to-order items."
     )
     is_active = models.BooleanField(default=True)
+    # One photo, not a gallery: a small shop photographs a garment once and
+    # that is what customers and staff need to recognise it on a shelf or a
+    # receipt. Uploaded and replaced through `POST /products/{id}/photo/`,
+    # never through the plain create/update body.
+    image = models.ImageField(upload_to=product_photo_path, null=True, blank=True)
 
     class Meta:
         db_table = "products"

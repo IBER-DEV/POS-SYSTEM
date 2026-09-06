@@ -13,7 +13,7 @@ designed so the second and the hundredth need no rewrite.
 |---|---|---|
 | 1 | Tenancy, auth, roles, catalog, ledger inventory, subscriptions, audit, idempotency | **done** |
 | 2 | Purchasing, Sales/POS, payments, customers, cash, refunds | **done** |
-| 3 | Offline sync, reporting, hardening | **done** — 172 tests green |
+| 3 | Offline sync, reporting, hardening | **done** — 191 tests green |
 
 ## Running it (Docker — first time)
 
@@ -251,6 +251,7 @@ money if they break:
 | `tests/test_refunds.py` | Never refund more than was sold, across successive refunds; rounding never strands money |
 | `tests/test_cash.py` | Only cash reaches the drawer; the arqueo adds up; a closed shift accepts nothing |
 | `tests/test_purchasing.py` | Receiving writes the ledger and moves the average cost; it cannot happen twice |
+| `tests/test_catalog.py` | A SKU/barcode is unique per business, not per product, with a clean 400 either way; a product's one photo uploads, replaces, validates format/size and deletes cleanly |
 | `tests/test_expenses.py` | A cash expense leaves the drawer so the arqueo still balances; net profit subtracts expenses from gross; the dashboard agrees with the separate reports |
 | `tests/test_concurrency.py` | **`slow`** — two registers on one unit, eight parallel sales, reversed lock order, simultaneous refunds |
 | `tests/test_sync.py` | Replaying an offline operation changes nothing; offline sales are accepted without stock and flagged; one bad operation does not sink the batch |
@@ -258,6 +259,6 @@ money if they break:
 | `tests/test_subscription_gating.py` | A lapsed subscription blocks writes, never reads |
 
 ```bash
-pytest                 # 172 tests, ~18s
-pytest -m "not slow"   # 168 tests, ~9s — the loop to run while coding
+pytest                 # 191 tests, ~19s
+pytest -m "not slow"   # 187 tests, ~11s — the loop to run while coding
 ```

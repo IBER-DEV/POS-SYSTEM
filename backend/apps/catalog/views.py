@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from django.db.models import Count, Sum
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.core import capabilities as caps
@@ -13,7 +15,13 @@ from apps.subscriptions.limits import enforce_limit
 
 from .filters import CategoryFilter, ProductFilter, ProductVariantFilter
 from .models import Brand, Category, Product, ProductVariant
-from .serializers import BrandSerializer, CategorySerializer, ProductSerializer, ProductVariantSerializer
+from .serializers import (
+    BrandSerializer,
+    CategorySerializer,
+    ProductPhotoSerializer,
+    ProductSerializer,
+    ProductVariantSerializer,
+)
 
 
 class CategoryViewSet(TenantModelViewSet):
@@ -75,6 +83,44 @@ class ProductViewSet(ActiveByDefaultMixin, TenantModelViewSet):
         instance.variants.update(is_active=False)
         for variant in variants:
             zero_out_stock(organization=self.request.organization, variant=variant, user=self.request.user)
+
+    @extend_schema(
+        request={"multipart/form-data": ProductPhotoSerializer},
+        responses={200: ProductSerializer},
+    )
+    @action(
+        detail=True,
+        methods=["post", "delete"],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def photo(self, request, pk=None):
+        """Upload/replace (POST) or remove (DELETE) the product's one photo.
+
+        Separate from the plain create/update body on purpose: a file does not
+        travel as JSON, and every other product field should stay editable
+        without ever needing multipart form data.
+        """
+        product = self.get_object()
+
+        if request.method == "DELETE":
+            if product.image:
+                product.image.delete(save=False)
+                product.image = None
+                product.save(update_fields=["image", "updated_at"])
+            return Response(self.get_serializer(product).data)
+
+        serializer = ProductPhotoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if product.image:
+            # Old file is not referenced anywhere else, so it is deleted
+            # before the new one is stored - otherwise every re-upload would
+            # leak an orphaned file on disk.
+            product.image.delete(save=False)
+        product.image = serializer.validated_data["image"]
+        product.save(update_fields=["image", "updated_at"])
+
+        return Response(self.get_serializer(product).data, status=status.HTTP_200_OK)
 
 
 class ProductVariantViewSet(ActiveByDefaultMixin, TenantModelViewSet):

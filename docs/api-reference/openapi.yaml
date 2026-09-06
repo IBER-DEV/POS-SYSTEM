@@ -3350,6 +3350,67 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/products/{id}/photo/:
+    post:
+      operationId: products_photo_create
+      description: |-
+        Upload/replace (POST) or remove (DELETE) the product's one photo.
+
+        Separate from the plain create/update body on purpose: a file does not
+        travel as JSON, and every other product field should stay editable
+        without ever needing multipart form data.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este product.
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductPhotoRequest'
+        required: true
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    delete:
+      operationId: products_photo_destroy
+      description: |-
+        Upload/replace (POST) or remove (DELETE) the product's one photo.
+
+        Separate from the plain create/update body on purpose: a file does not
+        travel as JSON, and every other product field should stay editable
+        without ever needing multipart form data.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Un Cadena UUID que identifique este product.
+        required: true
+      tags:
+      - products
+      security:
+      - organizationJWT: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
   /api/v1/purchases/:
     get:
       operationId: purchases_list
@@ -8121,6 +8182,10 @@ components:
           description: False for services or made-to-order items.
         is_active:
           type: boolean
+        image:
+          type: string
+          format: uri
+          readOnly: true
         variants:
           type: array
           items:
@@ -8134,7 +8199,16 @@ components:
       - category_name
       - created_at
       - id
+      - image
       - name
+    ProductPhotoRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
     ProductRequest:
       type: object
       description: |-
